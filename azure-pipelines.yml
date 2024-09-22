@@ -12,9 +12,7 @@ stages:
   - job: 'Build'
     displayName: 'Build job'
     pool:
-      vmImage: 'ubuntu-20.04'
-      demands:
-      - npm
+      name: local  # Use your local agent pool name
 
     variables:
       wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
@@ -71,8 +69,9 @@ stages:
   dependsOn: Build
   jobs:
   - deployment: Deploy
+    displayName: 'Deployment job'
     pool:
-      vmImage: 'ubuntu-20.04'
+      name: local  # Use your local agent pool name
     environment: dev
     strategy:
       runOnce:
