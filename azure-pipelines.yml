@@ -3,6 +3,7 @@ trigger:
 
 variables:
   buildConfiguration: 'Release'
+  WebAppName: 'your-web-app-name'  # Replace with your Azure Web App name
 
 stages:
 - stage: 'Build'
@@ -11,7 +12,9 @@ stages:
   - job: 'Build'
     displayName: 'Build job'
     pool:
-      name: local  # Use your local agent pool name
+      vmImage: 'ubuntu-20.04'
+      demands:
+      - npm
 
     variables:
       wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
@@ -62,3 +65,24 @@ stages:
 
     - publish: '$(Build.ArtifactStagingDirectory)'
       artifact: drop
+
+- stage: 'Deploy'
+  displayName: 'Deploy the web application'
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-20.04'
+    environment: dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'  # Replace with your Azure subscription name
+              appName: '$(WebAppName)'  # Name of your Azure Web App
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
