@@ -3,9 +3,9 @@ trigger:
 
 variables:
   buildConfiguration: 'Release'
-  WebAppNameDev: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual dev web app name (without the URL)
-  WebAppNameTest: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual test web app name (without the URL)
-  WebAppNameStaging: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual staging web app name (without the URL)
+  WebAppNameDev: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual dev web app name
+  WebAppNameTest: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual test web app name
+  WebAppNameStaging: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual staging web app name
   dotnetSdkVersion: '8.0.x'  # Specify .NET SDK version 8.x
 
 stages:
@@ -83,4 +83,10 @@ stages:
           - download: current
             artifact: drop
           - task: AzureWebApp@1
-     
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'  # Your Azure subscription
+              appName: '$(WebAppNameDev)'  # Name of your Azure Web App
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+
+# Add similar blocks for Test and Staging stages if needed
