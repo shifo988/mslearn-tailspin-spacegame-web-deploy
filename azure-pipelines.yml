@@ -4,8 +4,8 @@ trigger:
 variables:
   buildConfiguration: 'Release'
   WebAppNameDev: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual dev web app name
-  WebAppNameTest: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual test web app name
-  WebAppNameStaging: 'speedofwar-dpdpaqeydtfdexb5'  # Replace with your actual staging web app name
+  WebAppNameTest: 'your-test-web-app-name'  # Replace with your actual test web app name
+  WebAppNameStaging: 'your-staging-web-app-name'  # Replace with your actual staging web app name
   dotnetSdkVersion: '8.0.x'  # Specify .NET SDK version 8.x
 
 stages:
@@ -85,8 +85,70 @@ stages:
           - task: AzureWebApp@1
             displayName: 'Azure App Service Deploy: website'
             inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'  # Your Azure subscription
-              appName: '$(WebAppNameDev)'  # Name of your Azure Web App
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameDev)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
 
-# Add similar blocks for Test and Staging stages if needed
+- stage: 'Test'
+  displayName: 'Deploy to the test environment'
+  dependsOn: Dev
+  jobs:
+  - deployment: Deploy
+    pool:
+      name: local  # Specify your local agent pool name
+    environment: test
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameTest)'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+
+- stage: 'Staging'
+  displayName: 'Deploy to the staging environment'
+  dependsOn: Test
+  jobs:
+  - deployment: Deploy
+    pool:
+      name: local  # Specify your local agent pool name
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameStaging)'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+
+  - job: RunLoadTests
+    dependsOn: Deploy
+    displayName: 'Run load tests'
+    pool:
+      name: local  # Specify your local agent pool name
+    steps:
+    - script: |
+        wget -c archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.4.3.tgz
+        tar -xzf apache-jmeter-5.4.3.tgz
+      displayName: 'Install Apache JMeter'
+    - script: apache-jmeter-5.4.3/bin/jmeter -n -t LoadTest.jmx -o Results.xml -Jhostname=$(WebAppNameStaging)
+      displayName: 'Run Load tests'
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y xsltproc
+        xsltproc JMeter2JUnit.xsl Results.xml > JUnit.xml
+      displayName: 'Transform JMeter output to JUnit'
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: JUnit
+        testResultsFiles: JUnit.xml
