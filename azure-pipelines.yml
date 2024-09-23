@@ -3,20 +3,24 @@ trigger:
 
 variables:
   buildConfiguration: 'Release'
-  WebAppName: 'speedofwar'  # Use your actual Azure Web App name
+  WebAppNameDev: 'your-dev-web-app-name'  # Replace with your actual dev web app name
+  WebAppNameTest: 'your-test-web-app-name'  # Replace with your actual test web app name
+  WebAppNameStaging: 'your-staging-web-app-name'  # Replace with your actual staging web app name
+  dotnetSdkVersion: '8.0.x'  # Specify .NET SDK version 8.x
 
 stages:
 - stage: 'Build'
   displayName: 'Build the web application'
-  jobs: 
+  jobs:
   - job: 'Build'
     displayName: 'Build job'
     pool:
-      name: local  # Use your local agent pool name
+      vmImage: 'ubuntu-20.04'
+      demands:
+      - npm
 
     variables:
       wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
-      dotnetSdkVersion: '8.0.x'  # Specify .NET SDK version 8.x
 
     steps:
     - task: UseDotNet@2
@@ -32,7 +36,7 @@ stages:
     - script: './node_modules/.bin/node-sass $(wwwrootDir) --output $(wwwrootDir)'
       displayName: 'Compile Sass assets'
 
-    - script: npx gulp
+    - task: gulp@1
       displayName: 'Run gulp tasks'
 
     - script: 'echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt'
@@ -64,14 +68,13 @@ stages:
     - publish: '$(Build.ArtifactStagingDirectory)'
       artifact: drop
 
-- stage: 'Deploy'
-  displayName: 'Deploy the web application'
+- stage: 'Dev'
+  displayName: 'Deploy to the dev environment'
   dependsOn: Build
   jobs:
   - deployment: Deploy
-    displayName: 'Deployment job'
     pool:
-      name: local  # Use your local agent pool name
+      vmImage: 'ubuntu-20.04'
     environment: dev
     strategy:
       runOnce:
@@ -82,6 +85,69 @@ stages:
           - task: AzureWebApp@1
             displayName: 'Azure App Service Deploy: website'
             inputs:
-              azureSubscription: 'Resource Manager - Tailspin - Space Game'  # Replace with your Azure subscription name
-              appName: '$(WebAppName)'  # Name of your Azure Web App
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameDev)'
               package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+
+- stage: 'Test'
+  displayName: 'Deploy to the test environment'
+  dependsOn: Dev
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-20.04'
+    environment: test
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameTest)'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+
+- stage: 'Staging'
+  displayName: 'Deploy to the staging environment'
+  dependsOn: Test
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'ubuntu-20.04'
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+          - task: AzureWebApp@1
+            displayName: 'Azure App Service Deploy: website'
+            inputs:
+              azureSubscription: 'Resource Manager - Tailspin - Space Game'
+              appName: '$(WebAppNameStaging)'
+              package: '$(Pipeline.Workspace)/drop/$(buildConfiguration)/*.zip'
+  - job: RunLoadTests
+    dependsOn: Deploy
+    displayName: 'Run load tests'
+    pool:
+      vmImage: 'ubuntu-20.04'
+    steps:
+    - script: |
+        wget -c archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.4.3.tgz
+        tar -xzf apache-jmeter-5.4.3.tgz
+      displayName: 'Install Apache JMeter'
+    - script: apache-jmeter-5.4.3/bin/jmeter -n -t LoadTest.jmx -o Results.xml -Jhostname=$(WebAppNameStaging)
+      displayName: 'Run Load tests'
+    - script: |
+        sudo apt-get update
+        sudo apt-get install -y xsltproc
+        xsltproc JMeter2JUnit.xsl Results.xml > JUnit.xml
+      displayName: 'Transform JMeter output to JUnit'
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: JUnit
+        testResultsFiles: JUnit.xml
