@@ -3,7 +3,7 @@ trigger:
 
 variables:
   buildConfiguration: 'Release'
-  WebAppNameDev: 'shifo988-Space Game - web - Release-d7f00e67-01b0-48cb-a206-5dffe0ca7436'  # Replace with your actual dev web app name
+  WebAppNameDev: 'space_game'  # Replace with your actual dev web app name
   WebAppNameTest: 'your-test-web-app-name'  # Replace with your actual test web app name
   WebAppNameStaging: 'your-staging-web-app-name'  # Replace with your actual staging web app name
   dotnetSdkVersion: '8.0.x'  # Specify .NET SDK version 8.x
